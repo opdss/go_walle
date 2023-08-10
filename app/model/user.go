@@ -11,7 +11,7 @@ type User struct {
 
 	Username      string       `gorm:"column:username;size:100;notNull;default:'';comment:用户名" json:"username"`
 	Email         string       `gorm:"column:email;uniqueIndex;size:100;notNull;comment:邮箱" json:"email"`
-	Password      string       `gorm:"column:password;size:200;notNull;comment:密码" json:"-"`
+	Password      []byte       `gorm:"column:password;size:200;notNull;comment:密码" json:"-"`
 	Status        field.Status `gorm:"column:status;notNull;default:0;comment:状态" json:"status"`
 	RememberToken string       `gorm:"remember_token;size:500;notNull;default:'';comment:记住密码token" json:"-"`
 

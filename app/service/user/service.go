@@ -49,7 +49,7 @@ func (srv *Service) Login(params *LoginReq) (*LoginRes, error) {
 	if m.Status.IsDisable() {
 		return nil, errcode.ErrUserDisabled
 	}
-	if !(bcrypt.CompareHashAndPassword([]byte(m.Password), []byte(params.Password)) == nil) {
+	if !(bcrypt.CompareHashAndPassword(m.Password, []byte(params.Password)) == nil) {
 		return nil, errcode.ErrInvalidPwd
 	}
 	//生成token
@@ -153,7 +153,7 @@ func (srv *Service) Create(params *CreateReq) (err error) {
 	if err != nil {
 		return
 	}
-	m.Password = string(_pwd)
+	m.Password = _pwd
 	return srv.db.Create(&m).Error
 }
 
@@ -176,7 +176,7 @@ func (srv *Service) Update(params *UpdateReq) (err error) {
 		if _err != nil {
 			return _err
 		}
-		m.Password = string(v)
+		m.Password = v
 	}
 	return srv.db.UpdateColumns(&m).Error
 }

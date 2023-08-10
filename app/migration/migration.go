@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"errors"
 	"fmt"
 	"github.com/wuzfei/go-helper/rand"
 	"go-walle/app/internal/constants"
@@ -12,28 +13,37 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type Migration struct {
-	db  *gorm.DB
-	log *zap.Logger
+type Config struct {
+	Account  string `help:"超级管理员名称" default:"admin"`
+	Email    string `help:"超级管理员邮箱" default:"admin@gowalle.com"`
+	Password string `help:"超级管理员密码" default:""`
 }
 
-func NewMigration(log *zap.Logger, db *gorm.DB) *Migration {
+type Migration struct {
+	config *Config
+	db     *gorm.DB
+	log    *zap.Logger
+}
+
+func NewMigration(conf *Config, log *zap.Logger, db *gorm.DB) *Migration {
 	return &Migration{
-		db:  db,
-		log: log,
+		config: conf,
+		db:     db,
+		log:    log,
 	}
 }
 
 func (m *Migration) Setup() error {
 	err := m.createTables()
 	if err != nil {
+		m.log.Error("创建表失败", zap.Error(err))
 		return err
 	}
-	return m.initUser()
+	return m.initAdminAccount()
 }
 
 func (m *Migration) createTables() error {
-	err := m.db.AutoMigrate(
+	return m.db.AutoMigrate(
 		&model.User{},
 		&model.Server{},
 		&model.Space{},
@@ -43,22 +53,37 @@ func (m *Migration) createTables() error {
 		&model.Record{},
 		&model.Task{},
 	)
-	if err != nil {
-		m.log.Error("创建表失败", zap.Error(err))
-	}
-	return err
 }
 
-func (m *Migration) initUser() error {
-	defPwd := []byte(rand.StringN(12))
-	_pwd, _ := bcrypt.GenerateFromPassword(defPwd, bcrypt.DefaultCost)
+// initAdmin 初始化超管账户
+func (m *Migration) initAdminAccount() error {
 	mUser := model.User{
 		ID:       constants.SuperUserId,
 		Username: "admin",
-		Email:    "admin@qq.com",
-		Password: string(_pwd),
+		Email:    "admin@gowalle.com",
 		Status:   field.StatusEnable,
 	}
+	//设置密码
+	var pwd []byte
+	if m.config.Password == "" {
+		pwd = []byte(rand.StringN(12))
+	} else {
+		if len(m.config.Password) < 6 || len(m.config.Password) > 32 {
+			return errors.New("密码至少设置6个字符,最长32个字符")
+		}
+		pwd = []byte(m.config.Password)
+	}
+	mUser.Password, _ = bcrypt.GenerateFromPassword(pwd, bcrypt.DefaultCost)
+
+	//设置账号
+	if m.config.Account != "" {
+		mUser.Username = m.config.Account
+	}
+	//设置邮箱
+	if m.config.Email != "" {
+		mUser.Email = m.config.Email
+	}
+
 	err := m.db.Clauses(clause.OnConflict{
 		UpdateAll: true,
 	}).Create(&mUser).Error
@@ -66,6 +91,6 @@ func (m *Migration) initUser() error {
 		m.log.Error("初始化admin账户失败", zap.Error(err))
 		return err
 	}
-	m.log.Info(fmt.Sprintf("初始化admin账户成功，账号：%s, 密码：%s,请及时修改", mUser.Email, defPwd))
+	m.log.Info(fmt.Sprintf("初始化[%s]账户成功，账号：%s, 密码：%s,请及时修改", mUser.Username, mUser.Email, pwd))
 	return nil
 }

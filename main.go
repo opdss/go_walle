@@ -30,8 +30,12 @@ var web embed.FS
 var webAssets embed.FS
 
 var (
-	runCfg   global.Config
-	setupCfg global.Config
+	runCfg       global.Config
+	setupCfg     global.Config
+	migrationCfg struct {
+		global.Config
+		Admin migration.Config
+	}
 )
 
 var (
@@ -52,7 +56,7 @@ var (
 	}
 	migrationCmd = &cobra.Command{
 		Use:   "migration",
-		Short: "数据库迁移命令",
+		Short: "数据库迁移初始化命令",
 		RunE:  cmdMigration,
 	}
 	setupCmd = &cobra.Command{
@@ -79,7 +83,7 @@ func main() {
 	rootCmd.AddCommand(migrationCmd)
 	rootCmd.AddCommand(configCmd)
 	process.Bind(runCmd, &runCfg, defaults, cfgstruct.ConfigFile(configFile), envHome, rootDir)
-	process.Bind(migrationCmd, &runCfg, defaults, cfgstruct.ConfigFile(configFile), envHome, rootDir)
+	process.Bind(migrationCmd, &migrationCfg, defaults, cfgstruct.ConfigFile(configFile), envHome, rootDir)
 	process.Bind(configCmd, &runCfg, defaults, cfgstruct.ConfigFile(configFile), envHome, rootDir)
 	process.Bind(setupCmd, &setupCfg, defaults, cfgstruct.ConfigFile(configFile), envHome, cfgstruct.SetupMode(), rootDir)
 	process.Exec(rootCmd)
@@ -109,13 +113,14 @@ func cmdConfig(cmd *cobra.Command, args []string) error {
 
 // cmdMigration 数据库迁移初始化
 func cmdMigration(cmd *cobra.Command, args []string) error {
-	_log := log3.NewLog(&runCfg.Log)
-	db, err := db2.NewGormDB(&runCfg.Db, _log)
+	_log := log3.NewLog(&migrationCfg.Log)
+	db, err := db2.NewGormDB(&migrationCfg.Db, _log)
 	if err != nil {
 		return err
 	}
-	dsn, _ := runCfg.Db.GetDsn()
+	dsn, _ := migrationCfg.Db.GetDsn()
 	fmt.Println("运行数据库：", dsn)
-	mr := migration.NewMigration(_log.Named("migration"), db)
+	fmt.Println(migrationCfg)
+	mr := migration.NewMigration(&migrationCfg.Admin, _log.Named("migration"), db)
 	return mr.Setup()
 }
